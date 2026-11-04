@@ -305,14 +305,6 @@
       "use strict";
       const STORAGE_KEY = "shift-calendar-v1";
       const LANG_KEY = "shift-calendar-language";
-      const EXAMPLE_MIGRATION_KEY = "shift-calendar-example-migration-v1";
-      const previousExampleShifts = [
-        "", "03:15-13:00", "03:15-13:00", "20:00-07:00", "", "", "03:15-13:00",
-        "03:15-13:00", "12:30-22:00", "", "", "03:15-13:00", "03:15-13:00",
-        "11:00-20:30", "", "03:15-13:00", "03:15-13:00", "", "12:30-21:00",
-        "15:00-22:00", "", "03:15-13:00", "12:30-22:00", "", "", "",
-        "03:15-13:00", "11:00-20:30", "", ""
-      ];
       const translations = {
         en: {
           title: "Shift calendar", next: "Next shift", noNext: "No upcoming shifts", today: "Now", day: "Day",
@@ -467,29 +459,6 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
       const safeRemove = (key) => { try { localStorage.removeItem(key); return true; } catch (error) { console.warn("localStorage remove failed", error); return false; } };
 
       function validMonthKey(key) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(key); }
-      function removePreviousExampleMonth() {
-        const key = "2026-11";
-        const days = data.m[key];
-        if (!Array.isArray(days) || days.length !== previousExampleShifts.length) return false;
-        if (!days.every((day, i) => day && (day.os || "") === previousExampleShifts[i])) return false;
-
-        days.forEach((day, i) => {
-          const exampleShift = previousExampleShifts[i];
-          if ((day.s || "") === exampleShift) {
-            day.s = "";
-            day.os = "";
-          } else {
-            day.os = "";
-          }
-          if ((i === 0 || i === 28) && day.n === "4NDZ") day.n = "";
-        });
-
-        const hasPersonalData = days.some((day) =>
-          day.s || day.os || day.o || day.n || (Array.isArray(day.segments) && day.segments.length)
-        );
-        if (!hasPersonalData) delete data.m[key];
-        return true;
-      }
       function readStore() {
         const raw = safeGet(STORAGE_KEY);
         if (raw) {
@@ -498,10 +467,7 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
             if (parsed && parsed.m && typeof parsed.m === "object") data = parsed;
           } catch (error) { console.warn("Saved calendar data is invalid", error); }
         }
-        const migrationDone = safeGet(EXAMPLE_MIGRATION_KEY) === "1";
-        const removedExample = !migrationDone && removePreviousExampleMonth();
-        if (!raw || removedExample) writeStore();
-        if (!migrationDone) safeSet(EXAMPLE_MIGRATION_KEY, "1");
+        if (!raw) writeStore();
         const savedLang = safeGet(LANG_KEY);
         if (savedLang === "en" || savedLang === "pl") language = savedLang;
         const configRaw = safeGet("shift-calendar-cloud-v1");
