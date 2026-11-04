@@ -305,6 +305,7 @@
       "use strict";
       const STORAGE_KEY = "shift-calendar-v1";
       const LANG_KEY = "shift-calendar-language";
+      const EXAMPLE_MIGRATION_KEY = "shift-calendar-example-migration-v1";
       const previousExampleShifts = [
         "", "03:15-13:00", "03:15-13:00", "20:00-07:00", "", "", "03:15-13:00",
         "03:15-13:00", "12:30-22:00", "", "", "03:15-13:00", "03:15-13:00",
@@ -497,7 +498,10 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
             if (parsed && parsed.m && typeof parsed.m === "object") data = parsed;
           } catch (error) { console.warn("Saved calendar data is invalid", error); }
         }
-        if (!raw || removePreviousExampleMonth()) writeStore();
+        const migrationDone = safeGet(EXAMPLE_MIGRATION_KEY) === "1";
+        const removedExample = !migrationDone && removePreviousExampleMonth();
+        if (!raw || removedExample) writeStore();
+        if (!migrationDone) safeSet(EXAMPLE_MIGRATION_KEY, "1");
         const savedLang = safeGet(LANG_KEY);
         if (savedLang === "en" || savedLang === "pl") language = savedLang;
         const configRaw = safeGet("shift-calendar-cloud-v1");
@@ -1146,10 +1150,8 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
           }
           if (remoteRevision >= cloud.revision && !cloudDirty) {
             data = result.data;
-            const removedExample = removePreviousExampleMonth();
             cloud.revision = remoteRevision;
             writeStore(); saveCloudConfig(); render();
-            if (removedExample) scheduleCloudSave();
           }
           cloudConflict = false;
           if (!silent) $("syncStatus").textContent = tr("synced");
@@ -1209,10 +1211,8 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
             const result = await rpc("shift_calendar_get", { p_id: cloud.id, p_token: cloud.token });
             if (!result) throw new Error("calendar_not_found");
             data = result.data;
-            const removedExample = removePreviousExampleMonth();
             cloud.revision = Number(result.revision); writeStore(); saveCloudConfig();
             $("modalRoot").replaceChildren(); render();
-            if (removedExample) scheduleCloudSave();
             clearInterval(pollTimer); pollTimer = setInterval(() => pullCloud(true), 12000);
           } catch (error) { console.error("Shared calendar connection failed", error); alert(tr("setupFail")); }
         };
