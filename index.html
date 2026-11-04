@@ -1133,15 +1133,21 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
         try {
           const result = await rpc("shift_calendar_get", { p_id: cloud.id, p_token: cloud.token });
           if (!result) throw new Error("calendar_not_found");
-          if (Number(result.revision) > cloud.revision) {
+          const remoteRevision = Number(result.revision);
+          if (!Number.isFinite(remoteRevision) || !result.data || !result.data.m || typeof result.data.m !== "object") {
+            throw new Error("invalid_shared_calendar_data");
+          }
+          if (remoteRevision > cloud.revision) {
             if (cloudDirty) {
               cloudConflict = true;
               render();
               return;
             }
+          }
+          if (remoteRevision >= cloud.revision && !cloudDirty) {
             data = result.data;
             const removedExample = removePreviousExampleMonth();
-            cloud.revision = Number(result.revision);
+            cloud.revision = remoteRevision;
             writeStore(); saveCloudConfig(); render();
             if (removedExample) scheduleCloudSave();
           }
