@@ -193,9 +193,11 @@
     @media (prefers-color-scheme: dark) { .notice.warn { color: #ffe2a1; background: #4a3820; } }
     .sync-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: .72rem; color: var(--muted); padding: 0 3px; }
     .link-button { min-height: 34px; padding: 4px 8px; color: var(--blue-strong); background: transparent; border: 0; }
-    #shareButton.link-button { min-height: 46px; padding: 10px 14px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); }
     .sync-line #syncStatus { flex: 1; min-width: 0; }
-    #setupButton.sharing-ready { width: auto; min-height: 36px; justify-self: center; padding: 6px 12px; font-size: .8rem; }
+    .sharing-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .sharing-actions.ready { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; }
+    .sharing-actions > button { width: 100%; }
+    #setupButton.sharing-ready { min-height: 36px; padding: 6px 8px; font-size: .8rem; }
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -291,12 +293,14 @@
     <div class="sync-line">
       <span id="syncStatus"></span>
       <button type="button" class="link-button" id="reloadButton" hidden></button>
-      <button type="button" class="link-button" id="shareButton" hidden></button>
     </div>
     <section class="actions">
       <button type="button" id="replaceButton"></button>
       <button type="button" id="clearButton" class="ghost danger"></button>
-      <button type="button" id="setupButton" class="ghost"></button>
+      <div class="sharing-actions" id="sharingActions">
+        <button type="button" id="shareButton" hidden></button>
+        <button type="button" id="setupButton" class="ghost"></button>
+      </div>
     </section>
     <input id="jsonFile" class="sr-only" type="file" accept=".json,application/json">
   </main>
@@ -566,6 +570,7 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
         $("shareButton").textContent = tr("share");
         const sharingReady = !!(cloud.id && cloud.token);
         $("shareButton").hidden = !sharingReady;
+        $("sharingActions").classList.toggle("ready", sharingReady);
         $("setupButton").classList.toggle("sharing-ready", sharingReady);
         $("reloadButton").textContent = tr("reload");
         $("reloadButton").hidden = !cloudConflict;
