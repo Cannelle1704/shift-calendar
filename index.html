@@ -237,6 +237,8 @@
     .chip { min-height: 38px; padding: 7px 11px; border-radius: 999px; font-size: .78rem; }
     .chip.active { background: var(--blue); color: white; border-color: var(--blue); }
     @media (prefers-color-scheme: dark) { .chip.active { color: #071523; } }
+    .day-view-button { width: 100%; margin-top: 14px; }
+    .day-editor-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
     .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
     .sheet-actions .save { grid-column: span 2; }
     .segment-manager { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 14px; }
@@ -886,25 +888,24 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
           chips.append(chip);
         }
         const times = document.createElement("div"); times.className = "time-fields"; times.append(startInput.wrap, endInput.wrap);
-        const place = field(tr("location"), "text", day.o || "");
         const note = field(tr("note"), "text", day.n || "");
-        const actions = document.createElement("div"); actions.className = "sheet-actions";
-        const viewDay = document.createElement("button"); viewDay.type = "button"; viewDay.textContent = tr("viewDay");
+        const viewDay = document.createElement("button"); viewDay.type = "button"; viewDay.className = "day-view-button"; viewDay.textContent = tr("viewDay");
         viewDay.onclick = () => { dayIndex = index; view = "day"; $("modalRoot").replaceChildren(); render(); };
+        const actions = document.createElement("div"); actions.className = "day-editor-actions";
         const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = tr("cancel"); cancel.onclick = () => $("modalRoot").replaceChildren();
         const original = document.createElement("button"); original.type = "button"; original.textContent = tr("original");
         original.onclick = () => { setCurrent(day.os || ""); };
-        const save = document.createElement("button"); save.type = "button"; save.className = "primary save"; save.textContent = tr("save");
+        const save = document.createElement("button"); save.type = "button"; save.className = "primary"; save.textContent = tr("save");
         save.onclick = () => {
           if (Boolean(startInput.input.value) !== Boolean(endInput.input.value)) { alert(tr("timeError")); return; }
           const s = startInput.input.value && endInput.input.value ? `${startInput.input.value}-${endInput.input.value}` : "";
           if (s && !cleanTime(s)) { alert(tr("timeError")); return; }
           ensureMonth(monthKey);
-          data.m[monthKey][index] = { ...data.m[monthKey][index], s: s ? cleanTime(s) : "", o: place.input.value.trim(), n: note.input.value.trim() };
+          data.m[monthKey][index] = { ...data.m[monthKey][index], s: s ? cleanTime(s) : "", n: note.input.value.trim() };
           writeStore(); $("modalRoot").replaceChildren(); render(); scheduleCloudSave();
         };
-        actions.append(viewDay, cancel, original, save);
-        box.append(head, chips, times, place.wrap, note.wrap, actions);
+        actions.append(cancel, original, save);
+        box.append(head, chips, times, note.wrap, viewDay, actions);
         modal(box);
       }
       function openSegmentEditor(index, segmentIndex = -1) {
