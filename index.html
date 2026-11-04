@@ -193,6 +193,9 @@
     @media (prefers-color-scheme: dark) { .notice.warn { color: #ffe2a1; background: #4a3820; } }
     .sync-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: .72rem; color: var(--muted); padding: 0 3px; }
     .link-button { min-height: 34px; padding: 4px 8px; color: var(--blue-strong); background: transparent; border: 0; }
+    #shareButton.link-button { min-height: 46px; padding: 10px 14px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); }
+    .sync-line #syncStatus { flex: 1; min-width: 0; }
+    #setupButton.sharing-ready { width: auto; min-height: 36px; justify-self: center; padding: 6px 12px; font-size: .8rem; }
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -563,7 +566,9 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
         $("clearButton").textContent = pendingClear ? tr("tapAgain") : tr("clear");
         $("setupButton").textContent = tr("connect");
         $("shareButton").textContent = tr("share");
-        $("shareButton").hidden = !(cloud.id && cloud.token);
+        const sharingReady = !!(cloud.id && cloud.token);
+        $("shareButton").hidden = !sharingReady;
+        $("setupButton").classList.toggle("sharing-ready", sharingReady);
         $("reloadButton").textContent = tr("reload");
         $("reloadButton").hidden = !cloudConflict;
         $("syncStatus").textContent = cloudConflict ? tr("conflict") : cloud.id ? tr("synced") : tr("local");
