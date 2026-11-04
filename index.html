@@ -323,6 +323,11 @@
           upload: "Import schedule JSON", startEmpty: "Start with an empty month", replace: "Import schedule JSON",
           clear: "Clear this month", tapAgain: "Tap again", local: "Changes are saved on this device.",
           synced: "Shared calendar synced", syncPending: "Saving shared changes…", syncError: "Cloud sync needs attention.",
+          savingImport: "Import received. Saving to the shared calendar…",
+          importedLocal: "Imported on this device only. Connect sharing to sync it with other devices.",
+          importedShared: "Schedule imported and saved to the shared calendar. Please check the days.",
+          localImportFailed: "The schedule could not be saved in this browser. Check available storage and try again.",
+          importCloudFailed: "The schedule is on this device, but saving it to the shared calendar failed. Keep this page open and import the file again to retry.",
           connect: "Set up sharing", share: "Share edit link", editLinkWarning: "Anyone with this link can view and edit your calendar.",
           cancel: "Cancel", original: "Original", save: "Save", asPlanned: "As planned: {value}",
           start: "Start", end: "End", location: "Location (optional)", note: "Note",
@@ -363,6 +368,11 @@
           upload: "Importuj JSON grafiku", startEmpty: "Rozpocznij pusty miesiąc", replace: "Importuj JSON grafiku",
           clear: "Wyczyść ten miesiąc", tapAgain: "Dotknij ponownie", local: "Zmiany zapisano na tym urządzeniu.",
           synced: "Udostępniony kalendarz zsynchronizowany", syncPending: "Zapisywanie zmian…", syncError: "Synchronizacja z chmurą wymaga uwagi.",
+          savingImport: "Grafik wczytany. Zapisywanie w udostępnionym kalendarzu…",
+          importedLocal: "Zaimportowano tylko na tym urządzeniu. Włącz udostępnianie, aby zsynchronizować z innymi urządzeniami.",
+          importedShared: "Grafik zaimportowano i zapisano w udostępnionym kalendarzu. Sprawdź dni.",
+          localImportFailed: "Nie udało się zapisać grafiku w tej przeglądarce. Sprawdź dostępne miejsce i spróbuj ponownie.",
+          importCloudFailed: "Grafik jest na tym urządzeniu, ale nie udało się zapisać go w udostępnionym kalendarzu. Nie zamykaj strony i zaimportuj plik ponownie.",
           connect: "Skonfiguruj udostępnianie", share: "Udostępnij link do edycji", editLinkWarning: "Każda osoba z tym linkiem może wyświetlać i edytować kalendarz.",
           cancel: "Anuluj", original: "Oryginał", save: "Zapisz", asPlanned: "Według planu: {value}",
           start: "Początek", end: "Koniec", location: "Miejsce (opcjonalnie)", note: "Notatka",
@@ -435,6 +445,8 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
       let cloud = { url: "", key: "", id: "", token: "", revision: 0 };
       let pollTimer = 0;
       let saveTimer = 0;
+      let saveWaiters = [];
+      let cloudSaveInFlight = false;
       let pendingJsonReplace = false;
       let pendingClear = false;
       let cloudConflict = false;
@@ -498,7 +510,7 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
           saveCloudConfig();
         }
       }
-      function writeStore() { safeSet(STORAGE_KEY, JSON.stringify(data)); }
+      function writeStore() { return safeSet(STORAGE_KEY, JSON.stringify(data)); }
       function saveCloudConfig() { safeSet("shift-calendar-cloud-v1", JSON.stringify(cloud)); }
       function cleanTime(raw) {
         if (typeof raw !== "string") return null;
@@ -1044,17 +1056,22 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
             };
           });
           monthKey = importedMonth;
-          writeStore();
+          if (!writeStore()) throw new Error("local_storage_write_failed");
           const mismatch = parsed.days.length !== count;
           const monthName = dateLabel(monthDate(importedMonth), { month: "long", year: "numeric" });
-          showImportNotice(mismatch
-            ? tr("importCount", { found: parsed.days.length, days: count })
-            : tr("monthMismatch", { month: monthName }), mismatch);
+          showImportNotice(cloud.id && cloud.token
+            ? tr("savingImport")
+            : tr("importedLocal"), mismatch);
           render();
-          scheduleCloudSave();
+          const savedToCloud = await scheduleCloudSave();
+          if (cloud.id && cloud.token) {
+            showImportNotice(savedToCloud
+              ? (mismatch ? tr("importCount", { found: parsed.days.length, days: count }) : tr("importedShared"))
+              : tr("importCloudFailed"), !savedToCloud || mismatch);
+          }
         } catch (error) {
           console.error("Schedule JSON import failed", error);
-          showImportNotice(tr("invalidJson"), true);
+          showImportNotice(error && error.message === "local_storage_write_failed" ? tr("localImportFailed") : tr("invalidJson"), true);
         } finally {
           $("jsonFile").value = "";
         }
@@ -1071,27 +1088,45 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
         return response.json();
       }
       function scheduleCloudSave() {
-        if (!cloud.id || !cloud.token || cloudConflict) return;
+        if (!cloud.id || !cloud.token) return Promise.resolve(true);
+        if (cloudConflict) return Promise.resolve(false);
         cloudDirty = true;
         clearTimeout(saveTimer);
         $("syncStatus").textContent = tr("syncPending");
-        saveTimer = setTimeout(async () => {
-          try {
-            const nextRevision = await rpc("shift_calendar_save", { p_id: cloud.id, p_token: cloud.token, p_revision: cloud.revision, p_data: data });
-            if (nextRevision === null) {
-              cloudConflict = true;
-              render();
-              return;
-            }
-            cloud.revision = Number(nextRevision);
-            cloudDirty = false;
-            saveCloudConfig();
-            $("syncStatus").textContent = tr("synced");
-          } catch (error) {
-            console.error("Cloud calendar save failed", error);
-            $("syncStatus").textContent = tr("syncError");
+        const savePromise = new Promise((resolve) => saveWaiters.push(resolve));
+        saveTimer = setTimeout(flushCloudSave, 500);
+        return savePromise;
+      }
+      async function flushCloudSave() {
+        if (cloudSaveInFlight) {
+          saveTimer = setTimeout(flushCloudSave, 100);
+          return;
+        }
+        cloudSaveInFlight = true;
+        const waiters = saveWaiters;
+        saveWaiters = [];
+        try {
+          const nextRevision = await rpc("shift_calendar_save", { p_id: cloud.id, p_token: cloud.token, p_revision: cloud.revision, p_data: data });
+          const revision = Number(nextRevision);
+          if (nextRevision === null || !Number.isFinite(revision) || revision <= cloud.revision) {
+            cloudConflict = true;
+            render();
+            waiters.forEach((resolve) => resolve(false));
+            return;
           }
-        }, 500);
+          cloud.revision = revision;
+          cloudDirty = saveWaiters.length > 0;
+          saveCloudConfig();
+          $("syncStatus").textContent = cloudDirty ? tr("syncPending") : tr("synced");
+          waiters.forEach((resolve) => resolve(true));
+        } catch (error) {
+          console.error("Cloud calendar save failed", error);
+          $("syncStatus").textContent = tr("syncError");
+          waiters.forEach((resolve) => resolve(false));
+        } finally {
+          cloudSaveInFlight = false;
+          if (saveWaiters.length && !saveTimer) saveTimer = setTimeout(flushCloudSave, 0);
+        }
       }
       async function pullCloud(silent = false) {
         if (!cloud.id || !cloud.token) return;
