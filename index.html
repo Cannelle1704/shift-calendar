@@ -275,7 +275,6 @@
           <div>
             <span class="hours-label" id="actualHoursLabel"></span>
             <strong class="hours-value" id="actualHoursValue"></strong>
-            <span class="hours-label" id="workedHoursHint"></span>
           </div>
         </div>
         <div class="subline" id="hoursSubline"></div>
@@ -311,8 +310,8 @@
       const translations = {
         en: {
           title: "Shift calendar", next: "Next shift", noNext: "No upcoming shifts", today: "Now", day: "Day",
-          hours: "Hours this month", plannedHours: "Planned", actualHours: "Worked", workedHint: "Completed days only; overtime included",
-          hoursSub: "Shift length, breaks not deducted · {shifts} shifts · {off} days off",
+          hours: "Hours this month", plannedHours: "Planned", actualHours: "Worked",
+          hoursSub: "{shifts} shifts · {off} days off",
           calendar: "Calendar", list: "List", early: "Early", mid: "Mid", late: "Late", night: "Night",
           off: "Off", changed: "changed", checkImport: "Please check the days and tap any day to fix it.",
           emptyTitle: "No schedule for this month", emptyText: "Upload a schedule image or start with an empty month.",
@@ -356,8 +355,8 @@
         },
         pl: {
           title: "Kalendarz zmian", next: "Następna zmiana", noNext: "Brak nadchodzących zmian", today: "Teraz", day: "Dzień",
-          hours: "Godziny w tym miesiącu", plannedHours: "Plan", actualHours: "Przepracowane", workedHint: "Tylko zakończone dni; nadgodziny wliczone",
-          hoursSub: "Czas zmiany bez odliczania przerw · {shifts} zmian · {off} dni wolnych",
+          hours: "Godziny w tym miesiącu", plannedHours: "Plan", actualHours: "Przepracowane",
+          hoursSub: "{shifts} zmian · {off} dni wolnych",
           calendar: "Kalendarz", list: "Lista", early: "Rano", mid: "Środek dnia", late: "Popołudnie", night: "Noc",
           off: "Wolne", changed: "zmieniono", checkImport: "Sprawdź dni i dotknij dowolnego dnia, aby go poprawić.",
           emptyTitle: "Brak grafiku na ten miesiąc", emptyText: "Prześlij zdjęcie grafiku lub rozpocznij pusty miesiąc.",
@@ -550,7 +549,6 @@ grant execute on function public.shift_calendar_save(uuid, text, bigint, jsonb) 
         $("hoursTitle").textContent = tr("hours");
         $("plannedHoursLabel").textContent = tr("plannedHours");
         $("actualHoursLabel").textContent = tr("actualHours");
-        $("workedHoursHint").textContent = tr("workedHint");
         $("calendarView").textContent = tr("calendar");
         $("listView").textContent = tr("list");
         $("dayView").textContent = tr("day");
